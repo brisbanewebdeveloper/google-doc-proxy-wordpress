@@ -1,0 +1,3 @@
+[submodule "gdoc-prox"]
+	path = gdoc-prox
+	url = git@github.com:hironozu/gdoc-prox.git
