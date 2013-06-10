@@ -69,13 +69,37 @@ class GoogleDocProxyWidget extends WP_Widget {
     echo $before_widget;
 
     // Display Google Doc
-// $instance['client_id']
-// $instance['client_secret']
-// $instance['token']
+    require_once 'gdoc-prox/gdoc_prox.php';
+    $gdoc_prox = new gdoc_prox;
 
-echo 'XXXXXX';
+    $gdoc_prox->baseUrl = 'http://google-doc-proxy.hironozu.com/gdocprox';
 
-    include(plugin_dir_path(__FILE__) . '/views/widget.php');
+    $options = array(
+      'query' => array(
+        'c' => get_option('client_id'),
+        's' => get_option('client_secret'),
+        't' => get_option('token'),
+      ),
+    );
+
+
+    // var_dump($gdoc_prox->getCachedDocuments($options));
+    // var_dump($gdoc_prox->deleteDocument($instance['document_id'], $options));
+    // var_dump($gdoc_prox->deleteData($options));
+
+    // var_dump($gdoc_prox->getList($options));
+
+    // echo $gdoc_prox->show($instance['document_id'], $options);
+
+    $result = $gdoc_prox->get($instance['document_id'], $options);
+
+    if ($result->error) {
+      echo $result->message;
+    } else {
+      $content = $result->content;
+      echo $content->title;
+      echo $content->body;
+    }
 
     echo $after_widget;
 
@@ -91,9 +115,7 @@ echo 'XXXXXX';
 
     $instance = $old_instance;
 
-    $instance['client_id'] = strip_tags($new_instance['client_id']);
-    $instance['client_secret'] = strip_tags($new_instance['client_secret']);
-    $instance['token'] = strip_tags($new_instance['token']);
+    $instance['document_id'] = strip_tags($new_instance['document_id']);
 
     return $instance;
 
@@ -115,18 +137,18 @@ echo 'XXXXXX';
     );
 
     // Display the admin form, or not
-    if (get_option('client_id') and get_option('client_id') and get_option('client_id') and false) {
+    if (get_option('client_id') and get_option('client_id') and get_option('client_id')) {
 ?>
 <div>
-  <p><a target="_blank" href="">Select Document</a></p>
+  <p><a target="_blank" href="#">Select Document</a></p>
   <label for="<?php echo $this->get_field_id('document_id'); ?>">Document ID:</label>
-  <input id="<?php echo $this->get_field_id('document_id'); ?>" name="<?php echo $this->get_field_name('document_id'); ?>"  value="<?php echo $instance['client_id']; ?>" />
+  <input id="<?php echo $this->get_field_id('document_id'); ?>" name="<?php echo $this->get_field_name('document_id'); ?>"  value="<?php echo $instance['document_id']; ?>" />
 </div>
 <?php
     } else {
 ?>
 <p>You need to setup Google Doc Proxy before placing widget.</p>
-<p><a href="options-general.php?page=google-doc-proxy.php">Setup Google Doc Proxy</a></p>
+<p><a href="options-general.php?page=<?php echo plugin_dir_path(__FILE__); ?>google-doc-proxy.php">Setup Google Doc Proxy</a></p>
 <?php
     }
   } // end form
