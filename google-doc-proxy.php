@@ -36,8 +36,10 @@ class GoogleDocProxyWidget extends WP_Widget {
     // load plugin text domain
     add_action('init', array($this, 'widget_textdomain'));
 
+    $name = 'google-doc-proxy';
+
     parent::__construct(
-      'google-doc-proxy',
+      $name,
       __('Google Doc Proxy'),
       array(
         'classname'   =>  'google-doc-proxy',
@@ -47,8 +49,18 @@ class GoogleDocProxyWidget extends WP_Widget {
 
     // Register admin menu
     if (is_admin()) {
+
       add_action('admin_menu', array($this, 'admin_menu'));
       add_action('admin_init', array($this, 'register_settings'));
+      add_action('wp_ajax_search_document', array($this, 'search_document_callback'));
+
+      $file_path = '/' . $name . '/js/admin.js';
+
+      $url = WP_PLUGIN_URL . $file_path;
+      $file = WP_PLUGIN_DIR . $file_path;
+
+      wp_register_script($name, $url);
+      wp_enqueue_script($name);
     }
   } // end constructor
 
@@ -69,19 +81,8 @@ class GoogleDocProxyWidget extends WP_Widget {
     echo $before_widget;
 
     // Display Google Doc
-    require_once 'gdoc-prox/gdoc_prox.php';
-    $gdoc_prox = new gdoc_prox;
-
-    $gdoc_prox->baseUrl = 'http://google-doc-proxy.hironozu.com/gdocprox';
-
-    $options = array(
-      'query' => array(
-        'c' => get_option('client_id'),
-        's' => get_option('client_secret'),
-        't' => get_option('token'),
-      ),
-    );
-
+    $gdoc_prox = $this->get_gdoc_prox();
+    $options = $this->get_gdoc_options();
 
     // var_dump($gdoc_prox->getCachedDocuments($options));
     // var_dump($gdoc_prox->deleteDocument($instance['document_id'], $options));
@@ -137,12 +138,19 @@ class GoogleDocProxyWidget extends WP_Widget {
     );
 
     // Display the admin form, or not
-    if (get_option('client_id') and get_option('client_id') and get_option('client_id')) {
+    if (get_option('client_id') and get_option('client_secret') and get_option('token')) {
+
+      $element_id = $this->get_field_id('container');
 ?>
 <div>
-  <p><a target="_blank" href="#">Select Document</a></p>
+  <div id="<?php echo $element_id; ?>" class="gdox-prox-container">
+    <label for="<?php echo $this->get_field_id('search'); ?>">Search Document:</label>
+    <input class="gdox-prox-search" id="<?php echo $this->get_field_id('search'); ?>" name="<?php echo $this->get_field_name('search'); ?>" value="" />
+    <input class="button" type="button" onclick="gdocProxAdminMgr.onSearch(this);" class="gdoc-prox-search-submit" name="<?php echo $this->get_field_name('search_submit'); ?>" value="Search" />
+  </div>
+
   <label for="<?php echo $this->get_field_id('document_id'); ?>">Document ID:</label>
-  <input id="<?php echo $this->get_field_id('document_id'); ?>" name="<?php echo $this->get_field_name('document_id'); ?>"  value="<?php echo $instance['document_id']; ?>" />
+  <input class="document-id" id="<?php echo $this->get_field_id('document_id'); ?>" name="<?php echo $this->get_field_name('document_id'); ?>" value="<?php echo $instance['document_id']; ?>" />
 </div>
 <?php
     } else {
@@ -158,11 +166,32 @@ class GoogleDocProxyWidget extends WP_Widget {
   /*--------------------------------------------------*/
 
   /**
+   * Gets Google Doc Proxy Object
+   */
+  public function get_gdoc_options() {
+    return array(
+      'query' => array(
+        'c' => get_option('client_id'),
+        's' => get_option('client_secret'),
+        't' => get_option('token'),
+      ),
+    );
+  }
+  public function get_gdoc_prox() {
+
+    require_once 'gdoc-prox/gdoc_prox.php';
+    $gdoc_prox = new gdoc_prox;
+
+    $gdoc_prox->baseUrl = get_option('base_url', 'http://google-doc-proxy.hironozu.com/gdocprox');
+
+    return $gdoc_prox;
+  }
+
+  /**
    * Loads the Widget's text domain for localization and translation.
    */
   public function widget_textdomain() {
 
-    // TODO be sure to change 'widget-name' to the name of *your* plugin
     load_plugin_textdomain('google-doc-proxy', false, plugin_dir_path(__FILE__) . '/lang/');
 
   } // end widget_textdomain
@@ -178,6 +207,7 @@ class GoogleDocProxyWidget extends WP_Widget {
    * Register settings.
    */
   public function register_settings() {
+    register_setting('google_doc_proxy', 'base_url');
     register_setting('google_doc_proxy', 'client_id');
     register_setting('google_doc_proxy', 'client_secret');
     register_setting('google_doc_proxy', 'token');
@@ -221,6 +251,17 @@ class GoogleDocProxyWidget extends WP_Widget {
     </tbody>
     </table>
 
+    <h3>Advanced Settings</h3>
+
+    <table class="form-table">
+    <tbody>
+      <tr valign="top">
+        <th scope="row"><label for="base_url" title="Leave this field unless you are asked to use">Base URL</label></th>
+        <td><input class="regular-text" id="base_url" name="base_url" type="text" value="<?php echo get_option('base_url'); ?>"></td>
+      </tr>
+    </tbody>
+    </table>
+
     <?php submit_button(); ?>
 
   </form>
@@ -228,6 +269,42 @@ class GoogleDocProxyWidget extends WP_Widget {
 </div>
 <?php
   } // end settings_page
+
+  /**
+   * Callback for Search button.
+   */
+  function search_document_callback() {
+
+    // global $wpdb; // this is how to get access to the database
+
+    $data = array(
+      'error' => 0,
+      'message' => '',
+      'list' => array(),
+    );
+
+    $search_text = empty($_REQUEST['search_text']) ? '' : $_REQUEST['search_text'];
+
+    $gdoc_prox = $this->get_gdoc_prox();
+    $options = $this->get_gdoc_options();
+
+    $result = $gdoc_prox->getList($options);
+
+    if ($result->error) {
+      $data['error'] = 1;
+      $data['message'] = $result->message;
+    } else {
+      foreach ($result->list as $index => $document) {
+        if (preg_match("#{$search_text}#i", $document->title)) {
+          $data['list'][] = array($document->id => $document->title);
+        }
+      }
+    }
+
+    echo json_encode($data);
+
+    die();
+  } // end search_document_callback
 }
 
 add_action('widgets_init', create_function('', 'register_widget("GoogleDocProxyWidget");'));
