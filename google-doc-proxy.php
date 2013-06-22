@@ -54,7 +54,8 @@ class GoogleDocProxyWidget extends WP_Widget {
       add_action('admin_init', array($this, 'register_settings'));
       add_action('wp_ajax_search_document', array($this, 'search_document_callback'));
 
-      $file_path = '/' . $name . '/js/admin.js';
+      $dir_name = array_reverse(explode('/', dirname(__FILE__)));
+      $file_path = '/' . $dir_name[0] . '/js/admin.js';
 
       $url = WP_PLUGIN_URL . $file_path;
       $file = WP_PLUGIN_DIR . $file_path;
