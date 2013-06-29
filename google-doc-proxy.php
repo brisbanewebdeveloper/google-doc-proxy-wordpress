@@ -246,7 +246,7 @@ class GoogleDocProxyWidget extends WP_Widget {
         <td><input class="regular-text" id="client_secret" name="client_secret" type="text" value="<?php echo get_option('client_secret'); ?>"></td>
       </tr>
       <tr valign="top">
-        <th scope="row"><label for="token">Client secret</label></th>
+        <th scope="row"><label for="token">Token</label></th>
         <td><input class="regular-text" id="token" name="token" type="text" value="<?php echo get_option('token'); ?>"></td>
       </tr>
     </tbody>
