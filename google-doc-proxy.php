@@ -249,6 +249,22 @@ class GoogleDocProxyWidget extends WP_Widget {
         <th scope="row"><label for="token">Token</label></th>
         <td><input class="regular-text" id="token" name="token" type="text" value="<?php echo get_option('token'); ?>"></td>
       </tr>
+      <tr valign="top">
+        <th scope="row">&nbsp;</th>
+        <td><?php
+
+        if (get_option('client_id') and get_option('client_secret') and get_option('token')) {
+          $params = array(
+            'clientId' => get_option('client_id'),
+            'secret' => get_option('client_secret'),
+            'refreshToken' => get_option('token'),
+          );
+          $link = str_replace('gdocprox', 'cache-man/login?' . http_build_query($params), get_option('base_url'));
+          echo '<a target="_gocprox" href="' . $link . '">' . __('Cache Manager') . '</a>';
+        }
+
+      ?></td>
+      </tr>
     </tbody>
     </table>
 
