@@ -4,7 +4,7 @@ Donate link: http://hironozu.com/
 Tags: comments, spam
 Requires at least: 3.5.1
 Tested up to: 3.5
-Stable tag: 0.0
+Stable tag: 0.1
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -42,6 +42,10 @@ Please contact Hiro Nozu via http://google-doc-proxy.hironozu.com/
 
 = 0.0 =
 * Initial release.
+
+= 0.1 =
+* Fixed Typo.
+* Added the link for Cache Manager.
 
 == Upgrade Notice ==
 
