@@ -3,7 +3,7 @@
 Plugin Name: Google Doc Proxy
 Plugin URI: http://google-doc-proxy.hironozu.com/
 Description: This plugin provides to manage to display Google Docs via Gogle Doc Proxy.
-Version: 0.0
+Version: 0.2
 Author: Hiro Nozu
 Author URI: http://hironozu.com/
 License: A "Slug" license name e.g. GPL2
@@ -31,6 +31,12 @@ class GoogleDocProxyWidget extends WP_Widget {
   /* Constructor
   /*--------------------------------------------------*/
 
+  private function add_script($name, $file_path) {
+      $url = WP_PLUGIN_URL . $file_path;
+      $file = WP_PLUGIN_DIR . $file_path;
+      wp_register_script($name, $url);
+      wp_enqueue_script($name);
+  }
   public function __construct() {
 
     // load plugin text domain
@@ -47,21 +53,40 @@ class GoogleDocProxyWidget extends WP_Widget {
       )
     );
 
+    $dir_name = array_reverse(explode('/', dirname(__FILE__)));
+
     // Register admin menu
     if (is_admin()) {
 
       add_action('admin_menu', array($this, 'admin_menu'));
       add_action('admin_init', array($this, 'register_settings'));
-      add_action('wp_ajax_search_document', array($this, 'search_document_callback'));
 
-      $dir_name = array_reverse(explode('/', dirname(__FILE__)));
+      // AJAX callback (AJAX callback has to be defined here as is_admin is always true when request is made via AJAX)
+      add_action('wp_ajax_search_document', array($this, 'search_document_callback'));
+      add_action('wp_ajax_download', array($this, 'download_callback'));
+
       $file_path = '/' . $dir_name[0] . '/js/admin.js';
 
-      $url = WP_PLUGIN_URL . $file_path;
-      $file = WP_PLUGIN_DIR . $file_path;
+      $this->add_script($name, $file_path);
 
-      wp_register_script($name, $url);
-      wp_enqueue_script($name);
+    } else {
+      // Add non-Ajax front-end action hooks here
+      /*
+      if ( ! defined(GDOC_PROXY_JS_LOADED)) {
+
+        define('GDOC_PROXY_JS_LOADED', 1);
+
+        wp_enqueue_script('jquery');
+
+        add_action('wp_ajax_download', array($this, 'download_callback'));
+        $file_path = '/' . $dir_name[0] . '/js/site.js';
+
+        $this->add_script($name, $file_path);
+
+        // Enable to refer ajaxurl
+        wp_localize_script($name, 'gdoc_prox', array('ajaxurl' => admin_url('admin-ajax.php')));
+      }
+      */
     }
   } // end constructor
 
@@ -81,26 +106,35 @@ class GoogleDocProxyWidget extends WP_Widget {
 
     echo $before_widget;
 
-    // Display Google Doc
-    $gdoc_prox = $this->get_gdoc_prox();
-    $options = $this->get_gdoc_options();
+    if ($instance['document_id']) {
 
-    // var_dump($gdoc_prox->getCachedDocuments($options));
-    // var_dump($gdoc_prox->deleteDocument($instance['document_id'], $options));
-    // var_dump($gdoc_prox->deleteData($options));
+      // Display Google Doc
+      $gdoc_prox = $this->get_gdoc_prox();
+      $options = $this->get_gdoc_options();
 
-    // var_dump($gdoc_prox->getList($options));
+      // var_dump($gdoc_prox->getCachedDocuments($options));
+      // var_dump($gdoc_prox->deleteDocument($instance['document_id'], $options));
+      // var_dump($gdoc_prox->deleteData($options));
 
-    // echo $gdoc_prox->show($instance['document_id'], $options);
+      // var_dump($gdoc_prox->getList($options));
 
-    $result = $gdoc_prox->get($instance['document_id'], $options);
+      // echo $gdoc_prox->show($instance['document_id'], $options);
 
-    if ($result->error) {
-      echo $result->message;
-    } else {
-      $content = $result->content;
-      echo $content->title;
-      echo $content->body;
+      $result = $gdoc_prox->get($instance['document_id'], $options);
+
+      if ($result->error) {
+        echo $result->message;
+      } else {
+        $content = $result->content;
+        echo $content->title;
+        echo $content->body;
+      }
+    }
+    if ($instance['show_pdf_link']) {
+      $widgetid = str_replace('google-doc-proxy-', '', $args['widget_id']);
+      $url = admin_url('admin-ajax.php') . '?action=download&type=pdf&id=' . $widgetid;
+      // echo '<a class="gdoc-prox-pdf" href="#" data-id="' . $widgetid . '">' . __('Download PDF') . '</a>';
+      echo '<a href="' . $url . '">' . __('Download PDF') . '</a>';
     }
 
     echo $after_widget;
@@ -117,7 +151,10 @@ class GoogleDocProxyWidget extends WP_Widget {
 
     $instance = $old_instance;
 
-    $instance['document_id'] = strip_tags($new_instance['document_id']);
+    $instance['document_id'] = $new_instance['document_id'];
+    $instance['show_content'] = $new_instance['show_content'];
+    $instance['show_pdf_link'] = $new_instance['show_pdf_link'];
+    $instance['data'] = $new_instance['data'];
 
     return $instance;
 
@@ -132,6 +169,9 @@ class GoogleDocProxyWidget extends WP_Widget {
 
     $defaults = array(
       'document_id' => '',
+      'show_content' => true,
+      'show_pdf_link' => false,
+      'data' => '',
     );
     $instance = wp_parse_args(
       (array) $instance,
@@ -144,14 +184,28 @@ class GoogleDocProxyWidget extends WP_Widget {
       $element_id = $this->get_field_id('container');
 ?>
 <div>
-  <div id="<?php echo $element_id; ?>" class="gdox-prox-container">
+  <p id="<?php echo $element_id; ?>" class="gdox-prox-container">
     <label for="<?php echo $this->get_field_id('search'); ?>">Search Document:</label>
     <input class="gdox-prox-search" id="<?php echo $this->get_field_id('search'); ?>" name="<?php echo $this->get_field_name('search'); ?>" value="" />
     <input class="button" type="button" onclick="gdocProxAdminMgr.onSearch(this);" class="gdoc-prox-search-submit" name="<?php echo $this->get_field_name('search_submit'); ?>" value="Search" />
-  </div>
+  </p>
 
-  <label for="<?php echo $this->get_field_id('document_id'); ?>">Document ID:</label>
-  <input class="document-id" id="<?php echo $this->get_field_id('document_id'); ?>" name="<?php echo $this->get_field_name('document_id'); ?>" value="<?php echo $instance['document_id']; ?>" />
+  <p>
+    <label for="<?php echo $this->get_field_id('document_id'); ?>">Document ID:</label>
+    <input class="document-id" id="<?php echo $this->get_field_id('document_id'); ?>" name="<?php echo $this->get_field_name('document_id'); ?>" value="<?php echo $instance['document_id']; ?>" />
+  </p>
+
+  <h4>What to display</h4>
+  <p>
+    <label for="<?php echo $this->get_field_id('show_content'); ?>">Content:</label>
+    <input type="checkbox" class="show_content" id="<?php echo $this->get_field_id('show_content'); ?>" name="<?php echo $this->get_field_name('show_content'); ?>"<?php echo $instance['show_content'] ? ' checked' : ''; ?> />
+  </p>
+  <p>
+    <label for="<?php echo $this->get_field_id('show_pdf_link'); ?>">PDF Link:</label>
+    <input type="checkbox" class="show_pdf_link" id="<?php echo $this->get_field_id('show_pdf_link'); ?>" name="<?php echo $this->get_field_name('show_pdf_link'); ?>"<?php echo $instance['show_pdf_link'] ? ' checked' : ''; ?> />
+  </p>
+
+  <input type="hidden" class="godc_data" id="<?php echo $this->get_field_id('data'); ?>" name="<?php echo $this->get_field_name('data'); ?>" value="<?php echo $instance['data']; ?>" />
 </div>
 <?php
     } else {
@@ -288,7 +342,7 @@ class GoogleDocProxyWidget extends WP_Widget {
   } // end settings_page
 
   /**
-   * Callback for Search button.
+   * Callback for Search button at Admin side.
    */
   function search_document_callback() {
 
@@ -314,6 +368,7 @@ class GoogleDocProxyWidget extends WP_Widget {
       foreach ($result->list as $index => $document) {
         if (preg_match("#{$search_text}#i", $document->title)) {
           $data['list'][] = array($document->id => $document->title);
+          $data['data'][] = json_encode($document);
         }
       }
     }
@@ -322,6 +377,71 @@ class GoogleDocProxyWidget extends WP_Widget {
 
     die();
   } // end search_document_callback
+
+  /**
+   * Callback for download link/button at Site side.
+   */
+  function download_callback() {
+
+    if (empty($_REQUEST['id'])) die();
+    if (empty($_REQUEST['type'])) die();
+
+    $id = (int) $_REQUEST['id'];
+    $dummy = new GoogleDocProxyWidget;
+    $settings = $dummy->get_settings();
+    if (empty($settings[$id])) die();
+
+    $s = $settings[$id];
+
+    $type = $_REQUEST['type'];
+    switch ($type) {
+      case 'pdf':
+        if (empty($s['show_pdf_link'])) die();
+        break;
+      case 'word':
+        if (empty($s['show_word_link'])) die();
+        break;
+      case 'rtf':
+        if (empty($s['show_rtf_link'])) die();
+        break;
+      default:
+        die();
+    }
+
+    $document_id = $s['document_id'];
+
+    $gdoc_prox = $this->get_gdoc_prox();
+    $options = $this->get_gdoc_options();
+
+    $options['query']['type'] = $type;
+
+    $content = $gdoc_prox->download($document_id, $options);
+    $data = json_decode($s['data']);
+
+    // Send header
+    switch ($type) {
+      case 'pdf':
+        header('Content-type: application/pdf');
+        $file = $data->title . '.pdf';
+        break;
+      case 'word':
+        header('Content-type: application/vnd.ms-word');
+        $file = $data->title . '.docx';
+        break;
+      case 'rtf':
+        header('Content-type: application/rtf');
+        $file = $data->title . '.rtf';
+        break;
+      default:
+        die();
+    }
+
+    header('Content-Length: ' . filesize($content));
+    header('Content-Disposition: attachment;Filename=' . $file);
+    echo $content;
+
+    die();
+  }
 }
 
 add_action('widgets_init', create_function('', 'register_widget("GoogleDocProxyWidget");'));

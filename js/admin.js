@@ -18,7 +18,11 @@ gdocProxAdminMgr = {
         d = jQuery('<select class="result">');
         w.append(d);
         jQuery(element).after(w);
-        d.change(function() { jQuery(element).parents('form').find('.document-id').val(d.val()); });
+        d.change(function() {
+          var f = jQuery(element).parents('form');
+          f.find('.document-id').val(d.val());
+          f.find('.godc_data').val(d.data('doc_data')[this.selectedIndex - 1]);
+        });
       }
 
       d.find('option').remove();
@@ -35,6 +39,8 @@ gdocProxAdminMgr = {
 
           var l = response.list;
           var j = l.length;
+
+          d.data('doc_data', response.data);
 
           d.find('option').remove();
 
