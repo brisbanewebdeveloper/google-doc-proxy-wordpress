@@ -95,12 +95,30 @@ class GoogleDocProxyWidget extends WP_Widget {
   /*--------------------------------------------------*/
 
   /**
+   * Returns index part of widget id.
+   *
+   * google-doc-proxy-123 becomes 123
+   *
+   * @param array string    Widget ID
+   */
+  public function get_widget_index($widget_id) {
+    return str_replace('google-doc-proxy-', '', $widget_id);
+  } // end get_widget_index
+
+  /**
    * Outputs the content of the widget.
    *
-   * @param array args    The array of form elements
+   * @param array args      The array of form elements
    * @param array instance  The current instance of the widget
    */
   public function widget($args, $instance) {
+
+    global $gdoc_prox_display_content;
+    global $gdoc_prox_access_pdf;
+
+
+    $gdoc_prox_display_content = true;
+    $gdoc_prox_access_pdf = true;
 
     extract($args, EXTR_SKIP);
 
@@ -108,33 +126,57 @@ class GoogleDocProxyWidget extends WP_Widget {
 
     if ($instance['document_id']) {
 
-      // Display Google Doc
-      $gdoc_prox = $this->get_gdoc_prox();
-      $options = $this->get_gdoc_options();
+      //
+      // Setting the global variable $gdoc_prox_display_content to false
+      // let you hide this document.
+      // Useful if you want to display the document only for particular situation
+      // (e.g. when a memeber is about to see the document)
+      //
+      do_action('onShowGdocProxContent', array('widget_id' => $args['widget_id'], 'instance' => $instance));
 
-      // var_dump($gdoc_prox->getCachedDocuments($options));
-      // var_dump($gdoc_prox->deleteDocument($instance['document_id'], $options));
-      // var_dump($gdoc_prox->deleteData($options));
+      if ($gdoc_prox_display_content) {
 
-      // var_dump($gdoc_prox->getList($options));
+        // Display Google Doc
+        $gdoc_prox = $this->get_gdoc_prox();
+        $options = $this->get_gdoc_options();
 
-      // echo $gdoc_prox->show($instance['document_id'], $options);
+        // var_dump($gdoc_prox->getCachedDocuments($options));
+        // var_dump($gdoc_prox->deleteDocument($instance['document_id'], $options));
+        // var_dump($gdoc_prox->deleteData($options));
 
-      $result = $gdoc_prox->get($instance['document_id'], $options);
+        // var_dump($gdoc_prox->getList($options));
 
-      if ($result->error) {
-        echo $result->message;
-      } else {
-        $content = $result->content;
-        echo $content->title;
-        echo $content->body;
+        // echo $gdoc_prox->show($instance['document_id'], $options);
+
+        $result = $gdoc_prox->get($instance['document_id'], $options);
+
+        if ($result->error) {
+          echo $result->message;
+        } else {
+          $content = $result->content;
+          echo $content->title;
+          echo $content->body;
+        }
       }
     }
     if ($instance['show_pdf_link']) {
-      $widgetid = str_replace('google-doc-proxy-', '', $args['widget_id']);
-      $url = admin_url('admin-ajax.php') . '?action=download&type=pdf&id=' . $widgetid;
-      // echo '<a class="gdoc-prox-pdf" href="#" data-id="' . $widgetid . '">' . __('Download PDF') . '</a>';
-      echo '<a href="' . $url . '">' . __('Download PDF') . '</a>';
+
+      //
+      // Setting the global variable $gdoc_prox_access_pdf to false
+      // let you hide the download link for PDF.
+      // Useful if you want to display the link only for particular situation
+      // (e.g. when a memeber is about to see the document)
+      //
+      // NOTICE: This action is called at AJAX callback as well
+      //
+      do_action('onAccessGdocProxPDF', array('widget_id' => $args['widget_id'], 'instance' => $instance));
+
+      if ($gdoc_prox_access_pdf) {
+        $widgetid = $this->get_widget_index($args['widget_id']);
+        $url = admin_url('admin-ajax.php') . '?action=download&type=pdf&id=' . $widgetid;
+        // echo '<a class="gdoc-prox-pdf" href="#" data-id="' . $widgetid . '">' . __('Download PDF') . '</a>';
+        echo '<a href="' . $url . '">' . __('Download PDF') . '</a>';
+      }
     }
 
     echo $after_widget;
@@ -383,6 +425,11 @@ class GoogleDocProxyWidget extends WP_Widget {
    */
   function download_callback() {
 
+    global $gdoc_prox_access_pdf;
+
+
+    $gdoc_prox_access_pdf = true;
+
     if (empty($_REQUEST['id'])) die();
     if (empty($_REQUEST['type'])) die();
 
@@ -397,6 +444,16 @@ class GoogleDocProxyWidget extends WP_Widget {
     switch ($type) {
       case 'pdf':
         if (empty($s['show_pdf_link'])) die();
+        //
+        // Setting the global variable $gdoc_prox_access_pdf to false
+        // let you hide the download link for PDF.
+        // Useful if you want to display the link only for particular situation
+        // (e.g. when a memeber is about to see the document)
+        //
+        // NOTICE: This action is called when displaying the link as well
+        //
+        do_action('onAccessGdocProxPDF', array('widget_id' => $id, 'instance' => $s));
+        if ( ! $gdoc_prox_access_pdf) die();
         break;
       case 'word':
         if (empty($s['show_word_link'])) die();
@@ -445,3 +502,59 @@ class GoogleDocProxyWidget extends WP_Widget {
 }
 
 add_action('widgets_init', create_function('', 'register_widget("GoogleDocProxyWidget");'));
+
+
+/*
+
+  Sample use of hooks provided by this plugin
+
+*/
+// add_action('onShowGdocProxContent', 'sample_hook_onShowGdocProxContent');
+function sample_hook_onShowGdocProxContent($params) {
+
+  global $gdoc_prox_display_content;
+
+
+  $instance = $params['instance'];
+  $data = json_decode($instance['data']);
+  $widget_id = GoogleDocProxyWidget::get_widget_index($params['widget_id']); // This let you get 123 of google-doc-proxy-123
+
+  /*
+  var_dump($params['widget_id']);
+  var_dump($instance['document_id']);
+  var_dump($instance['show_content']);
+  var_dump($instance['show_pdf_link']);
+  var_dump($data);
+  */
+
+  // Not to display the content at all
+  // $gdoc_prox_display_content = false;
+
+  // Not to display the content depending on extra info for individual Google Doc
+  // $gdoc_prox_display_content = say_this_function_returns_boolean_after_checking_something($instance['document_id']);
+}
+
+// add_action('onAccessGdocProxPDF', 'sample_hook_onAccessGdocProxPDF');
+function sample_hook_onAccessGdocProxPDF($params) {
+
+  global $gdoc_prox_access_pdf;
+
+
+  $instance = $params['instance'];
+  $data = json_decode($instance['data']);
+  $widget_id = GoogleDocProxyWidget::get_widget_index($params['widget_id']); // This let you get 123 of google-doc-proxy-123
+
+  /*
+  var_dump($params['widget_id']);
+  var_dump($instance['document_id']);
+  var_dump($instance['show_content']);
+  var_dump($instance['show_pdf_link']);
+  var_dump($data);
+  */
+
+  // Not to allow anything regarding to PDF download at all
+  // $gdoc_prox_access_pdf = false;
+
+  // Not to allow anything regarding to PDF download for individual Google Doc
+  // $gdoc_prox_access_pdf = say_this_function_returns_boolean_after_checking_something($instance['document_id']);
+}

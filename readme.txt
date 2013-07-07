@@ -40,15 +40,16 @@ Please contact Hiro Nozu via http://google-doc-proxy.hironozu.com/
 
 == Changelog ==
 
-= 0.0 =
-* Initial release.
+= 0.2 =
+* Added the functionality to display download links.
+* Provided hooks to let other plugin manage whether to display things or not (e.g. Letting download/view PDF/content only for members).
 
 = 0.1 =
 * Fixed Typo.
 * Added the link for Cache Manager.
 
-= 0.2 =
-* Added the functionality to display download links.
+= 0.0 =
+* Initial release.
 
 == Upgrade Notice ==
 
